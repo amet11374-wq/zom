@@ -8,19 +8,23 @@
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #111; color: #fff; font-family: monospace; touch-action: none; }
         canvas { display: block; }
         #info { position: fixed; top: 15px; left: 15px; background: rgba(0,0,0,0.7); padding: 10px 15px; border-radius: 8px; pointer-events: none; font-size: 14px; }
+        #resetBtn { position: fixed; bottom: 25px; right: 20px; background: #00ff88; color: #111; border: none; padding: 12px 18px; border-radius: 8px; font-weight: bold; font-family: monospace; font-size: 14px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div id="info">Раздвигайте пальцы для зума | Тяните для сдвига<br>Масштаб: <span id="zoomVal">1x</span></div>
+    <div id="info">Раздвигайте пальцы для зума | Тяните для сдвига<br>Масштаб: <span id="zoomVal">1.00x</span></div>
+    <button id="resetBtn" onclick="resetView()">Сброс (1x)</button>
     <canvas id="canvas"></canvas>
     <script>
         const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d'), zoomVal = document.getElementById('zoomVal');
         let width, height, scale = 1, offsetX = 0, isDragging = false, startX = 0, initialPinchDist = null, initialScale = 1;
 
+        function resetView() { scale = 1; offsetX = window.innerWidth / 2; draw(); }
         function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; draw(); }
         window.addEventListener('resize', resize);
 
         function draw() {
+            if (isNaN(offsetX) || isNaN(scale)) { resetView(); return; }
             ctx.fillStyle = '#111'; ctx.fillRect(0, 0, width, height);
             const baseStep = 100, log10 = Math.floor(Math.log10(scale)), stepValue = Math.pow(10, -log10), pixelStep = baseStep * scale * stepValue, centerY = height / 2;
             ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, centerY); ctx.lineTo(width, centerY); ctx.stroke();
@@ -47,20 +51,33 @@
         window.addEventListener('mouseup', () => isDragging = false);
 
         canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) { isDragging = true; startX = e.touches.clientX - offsetX; }
-            else if (e.touches.length === 2) { isDragging = false; initialPinchDist = Math.hypot(e.touches.clientX - e.touches.clientX, e.touches.clientY - e.touches.clientY); initialScale = scale; }
+            if (e.touches.length === 1) {
+                isDragging = true;
+                startX = e.touches.item(0).clientX - offsetX;
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                const t1 = e.touches.item(0), t2 = e.touches.item(1);
+                initialPinchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                initialScale = scale;
+            }
         });
+
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            if (e.touches.length === 1 && isDragging) { offsetX = e.touches.clientX - startX; draw(); }
-            else if (e.touches.length === 2 && initialPinchDist) {
-                const dist = Math.hypot(e.touches.clientX - e.touches.clientX, e.touches.clientY - e.touches.clientY);
-                const midX = (e.touches.clientX + e.touches.clientX) / 2;
+            if (e.touches.length === 1 && isDragging) {
+                offsetX = e.touches.item(0).clientX - startX;
+                draw();
+            } else if (e.touches.length === 2 && initialPinchDist > 0) {
+                const t1 = e.touches.item(0), t2 = e.touches.item(1);
+                const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                const midX = (t1.clientX + t2.clientX) / 2;
                 const newScale = Math.max(0.01, Math.min(initialScale * (dist / initialPinchDist), 1e6));
                 offsetX = midX - (midX - offsetX) * (newScale / scale);
-                scale = newScale; draw();
+                scale = newScale;
+                draw();
             }
         }, { passive: false });
+
         canvas.addEventListener('touchend', () => { isDragging = false; initialPinchDist = null; });
 
         offsetX = window.innerWidth / 2; resize();
